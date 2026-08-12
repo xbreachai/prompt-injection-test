@@ -7,9 +7,9 @@ jobs:
   redeem:
     runs-on: ubuntu-latest
     env:
-      CLIENT_ID: ${{ secrets.AZURE_SENTINEL_CLIENTID_BA9ACC1504454285A0F64B92DCCD9637 }}
-      TENANT_ID: ${{ secrets.AZURE_SENTINEL_TENANTID_BA9ACC1504454285A0F64B92DCCD9637 }}
-      SUB_ID: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      CLIENT_ID: "51b7291d-69fb-4dcd-b4c6-3ff946deb8ae"
+      TENANT_ID: "d8bdf68e-f8ba-433d-9264-efe0a7ec68c4"
+      SUB_ID: "734e1bf8-c17f-4e98-84cf-eef97da5eb49"
       STOR: stor6a7c4d8158faf
       RG: 6a7c4d8158faf772cc8af8ef-rg
     steps:
