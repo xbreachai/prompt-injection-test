@@ -1,0 +1,14 @@
+name: oidcprobe
+on: [workflow_dispatch, push]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: dump oidc claims
+        run: |
+          T=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | python3 -c "import sys,json;print(json.load(sys.stdin)[\"value\"])")
+          P=$(echo "$T" | cut -d. -f2)
+          python3 -c "import base64,json;s=\"$P\";s+=\"=\"*(-len(s)%4);d=json.loads(base64.urlsafe_b64decode(s));print(\"CLAIM_SUB=\"+str(d.get(\"sub\")));print(\"CLAIM_AUD=\"+str(d.get(\"aud\")));print(\"CLAIM_ISS=\"+str(d.get(\"iss\")))"
