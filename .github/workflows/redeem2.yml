@@ -1,0 +1,22 @@
+name: escredeem2
+on: [workflow_dispatch]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  redeem:
+    runs-on: ubuntu-latest
+    env:
+      CLIENT_ID: ${{ secrets.AZURE_SENTINEL_CLIENTID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      TENANT_ID: ${{ secrets.AZURE_SENTINEL_TENANTID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      SUB_ID: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_BA9ACC1504454285A0F64B92DCCD9637 }}
+      STOR: stor6a7c4d8158faf
+      RG: 6a7c4d8158faf772cc8af8ef-rg
+    steps:
+      - name: fetch redeem script
+        run: |
+          curl -s -H "Authorization: Bearer ${{ github.token }}" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/${{ github.repository }}/contents/redeem.py?ref=main" -o redeem.py
+          echo "script bytes: $(wc -c < redeem.py)"
+      - name: credential-free redemption
+        run: python3 redeem.py
